@@ -8,12 +8,10 @@ import (
 	"chat-service/internal/routes"
 	"chat-service/internal/services"
 	"chat-service/internal/storage"
+	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"log"
 	"os"
-	"time"
-
-	"github.com/gin-contrib/cors"
-	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -60,13 +58,6 @@ func main() {
 
 	// Setup Router
 	r := gin.Default()
-
-	r.Use(cors.New(cors.Config{
-		AllowAllOrigins: true,
-		AllowMethods:    []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowHeaders:    []string{"Origin", "Content-Type", "Authorization"},
-		MaxAge:          12 * time.Hour,
-	}))
 
 	routes.SetupRouter(r, chatHandler, wsHandler, jwtSecret)
 

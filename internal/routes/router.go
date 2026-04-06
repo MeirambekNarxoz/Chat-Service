@@ -23,6 +23,7 @@ func SetupRouter(
 	apiParams.Use(middleware.AuthMiddleware(jwtSecret))
 	{
 		apiParams.POST("/create", chatHandler.CreateChat)
+		apiParams.POST("/group", chatHandler.CreateGroupChat)
 		apiParams.GET("/history/:chat_id", chatHandler.GetHistory)
 		apiParams.POST("/messages/upload", chatHandler.UploadFile)
 		apiParams.GET("/list", chatHandler.GetUserChats)

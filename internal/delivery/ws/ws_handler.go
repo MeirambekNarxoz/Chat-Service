@@ -49,8 +49,30 @@ func (h *WSHandler) Connect(c *gin.Context) {
 
 	h.hub.RegisterClient(userID, conn)
 
+	done := make(chan struct{})
+	
+	// Message writer loop (for pings)
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer func() {
+			ticker.Stop()
+			conn.Close()
+		}()
+		for {
+			select {
+			case <-ticker.C:
+				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					return
+				}
+			case <-done:
+				return
+			}
+		}
+	}()
+
 	// Clean up on disconnect
 	defer func() {
+		close(done)
 		h.hub.UnregisterClient(userID)
 		conn.Close()
 	}()

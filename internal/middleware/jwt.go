@@ -3,7 +3,7 @@ package middleware
 import (
 	"errors"
 	"net/http"
-	"strings"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -30,28 +30,32 @@ func UserIDFromToken(tokenString, secret string) (uint, error) {
 	return uint(idFloat), nil
 }
 
+// GetUserID retrieves the UserID safely from the context
+func GetUserID(c *gin.Context) (uint, bool) {
+	val, exists := c.Get("user_id")
+	if !exists {
+		return 0, false
+	}
+	userID, ok := val.(uint)
+	return userID, ok
+}
+
 func AuthMiddleware(secret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		auth := c.GetHeader("Authorization")
-		if auth == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authorization header is empty"})
+		userIDStr := c.GetHeader("X-User-Id")
+		
+		if userIDStr == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "x-user-id header is missing"})
 			return
 		}
 
-		const prefix = "Bearer "
-		if !strings.HasPrefix(auth, prefix) {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid auth header"})
-			return
-		}
-
-		tokenString := strings.TrimPrefix(auth, prefix)
-		userID, err := UserIDFromToken(tokenString, secret)
+		userIDUint, err := strconv.ParseUint(userIDStr, 10, 32)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "x-user-id header is invalid"})
 			return
 		}
 
-		c.Set("user_id", userID)
+		c.Set("user_id", uint(userIDUint))
 		c.Next()
 	}
 }

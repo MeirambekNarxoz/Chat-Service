@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # База данных PostgreSQL
+  chat_db:
+    image: postgres:15-alpine
+    container_name: chat_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432" # Проброс порта наружу, если нужно подключиться через DBeaver/DataGrip
+    volumes:
+      - chat_db_data:/var/lib/postgresql/data
+
+  # Объектное хранилище MinIO
+  chat_minio:
+    image: minio/minio:latest
+    container_name: chat_minio
+    restart: always
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000" # API порт MinIO
+      - "9001:9001" # Web-консоль управления MinIO
+    volumes:
+      - chat_minio_data:/data
+
+  # Сам Go микросервис
+  chat_app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chat_service_app
+    restart: always
+    ports:
+      - "8085:8085"
+    depends_on:
+      - chat_db
+      - chat_minio
+    environment:
+      # Переопределяем переменные окружения, чтобы они указывали на соседние контейнеры
+      PORT: "8085"
+      DB_URL: "host=chat_db user=postgres password=postgres dbname=postgres port=5432 sslmode=disable"
+      MINIO_ENDPOINT: "chat_minio:9000"
+      MINIO_ACCESS_KEY: "minioadmin"
+      MINIO_SECRET_KEY: "minioadmin"
+      MINIO_USE_SSL: "false"
+      JWT_SECRET: "qwerty_123"
+
+# Постоянные хранилища (чтобы данные не удалялись при перезапуске контейнеров)
+volumes:
+  chat_db_data:
+  chat_minio_data:

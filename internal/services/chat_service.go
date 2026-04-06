@@ -34,3 +34,18 @@ func (s *ChatService) GetHistory(chatID uint) ([]models.Message, error) {
 func (s *ChatService) GetUserChats(userID uint) ([]models.Chat, error) {
 	return s.repo.GetUserChats(userID)
 }
+func (s *ChatService) CreateGroupChat(name string, userIDs []uint) (*models.Chat, error) {
+	chat := &models.Chat{
+		Name: name,
+		Type: models.ChatTypeGroup,
+	}
+	if err := s.repo.CreateChat(chat); err != nil {
+		return nil, err
+	}
+
+	for _, userID := range userIDs {
+		_ = s.repo.AddParticipant(&models.ChatParticipant{ChatID: chat.ID, UserID: userID})
+	}
+
+	return chat, nil
+}

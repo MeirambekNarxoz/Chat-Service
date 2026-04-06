@@ -61,7 +61,6 @@ func (h *ChatHandler) CreateChat(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
-
 	userID := c.MustGet("user_id").(uint)
 
 	chat, err := h.chatService.CreatePersonalChat(userID, req.RecipientID)
@@ -81,4 +80,27 @@ func (h *ChatHandler) GetUserChats(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, chats)
+}
+func (h *ChatHandler) CreateGroupChat(c *gin.Context) {
+	var req struct {
+		Name    string `json:"name" binding:"required"`
+		UserIDs []uint `json:"user_ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	userID := c.MustGet("user_id").(uint)
+	
+	// Ensure the creator is also in the participants list
+	allUserIDs := append(req.UserIDs, userID)
+	
+	chat, err := h.chatService.CreateGroupChat(req.Name, allUserIDs)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create group chat"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, chat)
 }

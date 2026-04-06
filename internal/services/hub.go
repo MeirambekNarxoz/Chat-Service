@@ -3,7 +3,6 @@ package services
 import (
 	"chat-service/internal/models"
 	"chat-service/internal/repository"
-	"context"
 	"encoding/json"
 	"log"
 	"sync"
@@ -56,23 +55,47 @@ func (h *Hub) Run() {
 			h.mu.Unlock()
 
 		case msg := <-h.broadcast:
-			// Save to DB
-			msg.CreatedAt = time.Now()
-			if err := h.chatRepo.SaveMessage(msg); err != nil {
-				log.Printf("Failed to save msg: %v", err)
+			// 1. Global Chat Logic (if ChatID is 0)
+			if msg.ChatID == 0 {
+				msg.CreatedAt = time.Now()
+				h.mu.Lock()
+				msgBytes, _ := json.Marshal(msg)
+				log.Printf("Global broadcast from user %d", msg.SenderID)
+				for userID, conn := range h.clients {
+					err := conn.WriteMessage(websocket.TextMessage, msgBytes)
+					if err != nil {
+						log.Printf("Error sending global msg to user %d: %v", userID, err)
+						conn.Close()
+						delete(h.clients, userID)
+					}
+				}
+				h.mu.Unlock()
 				continue
 			}
 
-			// Ideally, you get all participants of the chat, and only send to them
-			// For simplicity we fetch online users. In prod, you use Redis Pub/Sub here.
-			// Let's pretend everyone is in the chat
+			// 2. Private/Group Chat Logic (if ChatID > 0)
+			msg.CreatedAt = time.Now()
+			if err := h.chatRepo.SaveMessage(msg); err != nil {
+				log.Printf("Failed to save msg to DB: %v", err)
+				continue
+			}
+
+			participants, err := h.chatRepo.GetChatParticipants(msg.ChatID)
+			if err != nil {
+				log.Printf("Failed to get chat participants: %v", err)
+				continue
+			}
+
 			h.mu.Lock()
-			for _, conn := range h.clients {
-				msgBytes, _ := json.Marshal(msg)
-				err := conn.WriteMessage(websocket.TextMessage, msgBytes)
-				if err != nil {
-					log.Printf("Error sending message: %v", err)
-					conn.Close()
+			msgBytes, _ := json.Marshal(msg)
+			for _, userID := range participants {
+				if conn, ok := h.clients[userID]; ok {
+					err := conn.WriteMessage(websocket.TextMessage, msgBytes)
+					if err != nil {
+						log.Printf("Error sending message to user %d: %v", userID, err)
+						conn.Close()
+						delete(h.clients, userID)
+					}
 				}
 			}
 			h.mu.Unlock()

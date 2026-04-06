@@ -24,7 +24,7 @@ func NewMinioClient(endpoint, accessKey, secretKey string, useSSL bool) *MinioCl
 		log.Fatalf("Failed to initialize MinIO client: %v", err)
 	}
 
-	bucketName := "chat-media"
+	bucketName := "image"
 	ctx := context.Background()
 	err = minioClient.MakeBucket(ctx, bucketName, minio.MakeBucketOptions{})
 	if err != nil {

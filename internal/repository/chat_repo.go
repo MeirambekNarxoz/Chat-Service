@@ -38,3 +38,8 @@ func (r *ChatRepository) GetUserChats(userID uint) ([]models.Chat, error) {
 		Find(&chats).Error
 	return chats, err
 }
+func (r *ChatRepository) GetChatParticipants(chatID uint) ([]uint, error) {
+	var userIDs []uint
+	err := r.db.Model(&models.ChatParticipant{}).Where("chat_id = ?", chatID).Pluck("user_id", &userIDs).Error
+	return userIDs, err
+}
