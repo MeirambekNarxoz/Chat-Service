@@ -38,6 +38,24 @@ func NewMinioClient(endpoint, accessKey, secretKey string, useSSL bool) *MinioCl
 		log.Printf("Successfully created %s\n", bucketName)
 	}
 
+	// Set public read policy
+	policy := fmt.Sprintf(`{
+		"Version": "2012-10-17",
+		"Statement": [
+			{
+				"Action": ["s3:GetObject"],
+				"Effect": "Allow",
+				"Principal": "*",
+				"Resource": ["arn:aws:s3:::%s/*"],
+				"Sid": ""
+			}
+		]
+	}`, bucketName)
+	err = minioClient.SetBucketPolicy(ctx, bucketName, policy)
+	if err != nil {
+		log.Printf("Error setting bucket policy: %v\n", err)
+	}
+
 	return &MinioClient{
 		client:     minioClient,
 		bucketName: bucketName,

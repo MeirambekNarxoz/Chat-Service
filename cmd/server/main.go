@@ -1,45 +1,30 @@
 package main
 
 import (
+	"chat-service/internal/config"
 	"chat-service/internal/database"
 	httpDelivery "chat-service/internal/delivery/http"
 	wsDelivery "chat-service/internal/delivery/ws"
+	"chat-service/internal/models"
 	"chat-service/internal/repository"
 	"chat-service/internal/routes"
 	"chat-service/internal/services"
 	"chat-service/internal/storage"
+
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
 	"log"
-	"os"
 )
 
 func main() {
-	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found, relying on environment variables")
-	}
+	cfg := config.LoadConfig()
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8085"
-	}
-
-	dbUrl := os.Getenv("DB_URL")
-	jwtSecret := os.Getenv("JWT_SECRET")
-
-	// Init DB and Migration
-	db := database.InitDB(dbUrl)
-	database.RunMigrations(dbUrl)
-
-	// MinIO configuration
-	minioEndpoint := os.Getenv("MINIO_ENDPOINT")
-	minioAccessKey := os.Getenv("MINIO_ACCESS_KEY")
-	minioSecretKey := os.Getenv("MINIO_SECRET_KEY")
-	minioUseSSL := os.Getenv("MINIO_USE_SSL") == "true"
+	// Init DB and Auto-Migration
+	db := database.InitDB(cfg.DBURL)
+	db.AutoMigrate(&models.Chat{}, &models.ChatParticipant{}, &models.Message{})
 
 	var minioClient *storage.MinioClient
-	if minioEndpoint != "" && minioAccessKey != "" {
-		minioClient = storage.NewMinioClient(minioEndpoint, minioAccessKey, minioSecretKey, minioUseSSL)
+	if cfg.MinIOEndpoint != "" && cfg.MinIOAccessKey != "" {
+		minioClient = storage.NewMinioClient(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinIOUseSSL)
 	} else {
 		log.Println("WARNING: MinIO credentials missing, file upload will fail")
 	}
@@ -54,15 +39,14 @@ func main() {
 
 	// Handlers
 	chatHandler := httpDelivery.NewChatHandler(chatService, minioClient)
-	wsHandler := wsDelivery.NewWSHandler(hub, jwtSecret)
+	wsHandler := wsDelivery.NewWSHandler(hub, cfg.JwtSecret)
 
 	// Setup Router
 	r := gin.Default()
+	routes.SetupRouter(r, chatHandler, wsHandler, cfg.JwtSecret)
 
-	routes.SetupRouter(r, chatHandler, wsHandler, jwtSecret)
-
-	log.Printf("Chat Service starting on port %s", port)
-	if err := r.Run(":" + port); err != nil {
+	log.Printf("Chat Service starting on port %s", cfg.Port)
+	if err := r.Run(":" + cfg.Port); err != nil {
 		log.Fatalf("Failed to run server: %v", err)
 	}
 }

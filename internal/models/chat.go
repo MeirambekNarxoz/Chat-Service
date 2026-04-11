@@ -2,17 +2,8 @@ package models
 
 import "time"
 
-type ChatType string
-
-const (
-	ChatTypePersonal ChatType = "PERSONAL"
-	ChatTypeGroup    ChatType = "GROUP"
-)
-
 type Chat struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
-	Name      string    `gorm:"type:varchar(255)" json:"name"` // Used mainly for GROUP chats
-	Type      ChatType  `gorm:"type:varchar(20);not null" json:"type"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -28,5 +19,6 @@ type Message struct {
 	SenderID  uint      `gorm:"not null" json:"sender_id"`
 	Text      string    `gorm:"type:text" json:"text"`
 	FileURL   string    `gorm:"type:text" json:"file_url,omitempty"`
+	IsRead    bool      `gorm:"default:false" json:"is_read"`
 	CreatedAt time.Time `json:"created_at"`
 }

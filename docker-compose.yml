@@ -9,7 +9,7 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres
+      POSTGRES_DB: chat_db
     ports:
       - "5432:5432" # Проброс порта наружу, если нужно подключиться через DBeaver/DataGrip
     volumes:
@@ -45,12 +45,12 @@ services:
     environment:
       # Переопределяем переменные окружения, чтобы они указывали на соседние контейнеры
       PORT: "8085"
-      DB_URL: "host=chat_db user=postgres password=postgres dbname=postgres port=5432 sslmode=disable"
+      DB_URL: "host=chat_db user=postgres password=postgres dbname=chat_db port=5432 sslmode=disable"
       MINIO_ENDPOINT: "chat_minio:9000"
       MINIO_ACCESS_KEY: "minioadmin"
       MINIO_SECRET_KEY: "minioadmin"
       MINIO_USE_SSL: "false"
-      JWT_SECRET: "qwerty_123"
+      JWT_SECRET: "z6B9v2P5m8X1k4R7j0N3f6G9w2Q5s8D1"
 
 # Постоянные хранилища (чтобы данные не удалялись при перезапуске контейнеров)
 volumes:

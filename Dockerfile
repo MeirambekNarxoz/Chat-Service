@@ -1,20 +1,27 @@
-FROM golang:1.23-alpine AS builder
+# Build stage
+FROM golang:1.23-alpine AS build
 
 WORKDIR /app
 
+# Copy go mod and sum files
 COPY go.mod go.sum ./
 RUN go mod download
 
+# Copy the source code
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o app .
+# Build the application
+RUN go build -o main ./cmd/server/main.go
 
-FROM alpine:3.20
+# Run stage
+FROM alpine:latest
 
 WORKDIR /app
 
-COPY --from=builder /app/app .
+# Copy the binary from the build stage
+COPY --from=build /app/main .
+COPY .env .
 
 EXPOSE 8085
 
-CMD ["./app"]
+CMD ["./main"]

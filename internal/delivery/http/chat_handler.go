@@ -34,7 +34,7 @@ func (h *ChatHandler) UploadFile(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"url": fileUrl})
+	c.JSON(http.StatusOK, gin.H{"file_url": fileUrl})
 }
 
 func (h *ChatHandler) GetHistory(c *gin.Context) {
@@ -63,44 +63,40 @@ func (h *ChatHandler) CreateChat(c *gin.Context) {
 	}
 	userID := c.MustGet("user_id").(uint)
 
-	chat, err := h.chatService.CreatePersonalChat(userID, req.RecipientID)
+	chat, err := h.chatService.GetOrCreatePersonalChat(userID, req.RecipientID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create chat"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get or create chat"})
 		return
 	}
 
-	c.JSON(http.StatusCreated, chat)
+	c.JSON(http.StatusCreated, gin.H{
+		"chat_id":    chat.ID,
+		"created_at": chat.CreatedAt,
+	})
 }
 
 func (h *ChatHandler) GetUserChats(c *gin.Context) {
 	userID := c.MustGet("user_id").(uint)
-	chats, err := h.chatService.GetUserChats(userID)
+	chats, err := h.chatService.GetUserChatsRich(userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get chats"})
 		return
 	}
 	c.JSON(http.StatusOK, chats)
 }
-func (h *ChatHandler) CreateGroupChat(c *gin.Context) {
-	var req struct {
-		Name    string `json:"name" binding:"required"`
-		UserIDs []uint `json:"user_ids" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+
+func (h *ChatHandler) MarkAsRead(c *gin.Context) {
+	chatID, err := strconv.ParseUint(c.Param("chat_id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid chat_id"})
 		return
 	}
 
 	userID := c.MustGet("user_id").(uint)
-	
-	// Ensure the creator is also in the participants list
-	allUserIDs := append(req.UserIDs, userID)
-	
-	chat, err := h.chatService.CreateGroupChat(req.Name, allUserIDs)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create group chat"})
+	if err := h.chatService.MarkAsRead(uint(chatID), userID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to mark as read"})
 		return
 	}
 
-	c.JSON(http.StatusCreated, chat)
+	c.JSON(http.StatusOK, gin.H{"message": "marked as read"})
 }
