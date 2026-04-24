@@ -7,10 +7,11 @@ import (
 
 type ChatService struct {
 	repo *repository.ChatRepository
+	hub  *Hub
 }
 
-func NewChatService(repo *repository.ChatRepository) *ChatService {
-	return &ChatService{repo: repo}
+func NewChatService(repo *repository.ChatRepository, hub *Hub) *ChatService {
+	return &ChatService{repo: repo, hub: hub}
 }
 
 type ChatDTO struct {
@@ -18,6 +19,7 @@ type ChatDTO struct {
 	RecipientID uint            `json:"recipient_id"`
 	LastMessage *models.Message `json:"last_message"`
 	UnreadCount int64           `json:"unread_count"`
+	IsOnline    bool            `json:"is_online"`
 }
 
 func (s *ChatService) GetOrCreatePersonalChat(user1ID, user2ID uint) (*models.Chat, error) {
@@ -73,11 +75,13 @@ func (s *ChatService) GetUserChatsRich(userID uint) ([]ChatDTO, error) {
 
 	var richChats []ChatDTO
 	for _, chat := range chats {
+		recipientID := recipients[chat.ID]
 		richChats = append(richChats, ChatDTO{
 			ID:          chat.ID,
-			RecipientID: recipients[chat.ID],
+			RecipientID: recipientID,
 			LastMessage: lastMessages[chat.ID],
 			UnreadCount: unreadCounts[chat.ID],
+			IsOnline:    s.hub.IsUserOnline(recipientID),
 		})
 	}
 

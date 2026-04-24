@@ -7,12 +7,10 @@ import (
 	"log"
 	"sync"
 	"time"
-
-	"github.com/gorilla/websocket"
 )
 
 type Hub struct {
-	clients    map[uint]*websocket.Conn
+	clients    map[uint]chan []byte
 	register   chan *ClientInfo
 	unregister chan uint
 	broadcast  chan *models.Message
@@ -23,12 +21,12 @@ type Hub struct {
 
 type ClientInfo struct {
 	UserID uint
-	Conn   *websocket.Conn
+	Send   chan []byte
 }
 
 func NewHub(chatRepo *repository.ChatRepository) *Hub {
 	return &Hub{
-		clients:    make(map[uint]*websocket.Conn),
+		clients:    make(map[uint]chan []byte),
 		register:   make(chan *ClientInfo),
 		unregister: make(chan uint),
 		broadcast:  make(chan *models.Message),
@@ -41,18 +39,27 @@ func (h *Hub) Run() {
 		select {
 		case client := <-h.register:
 			h.mu.Lock()
-			h.clients[client.UserID] = client.Conn
+			if oldCh, ok := h.clients[client.UserID]; ok {
+				close(oldCh) // Disconnect previous session
+			}
+			h.clients[client.UserID] = client.Send
 			h.mu.Unlock()
 			log.Printf("User %d connected", client.UserID)
 
+			// Broadcast presence update (outside lock)
+			h.broadcastPresence(client.UserID, true)
+
 		case userID := <-h.unregister:
 			h.mu.Lock()
-			if conn, ok := h.clients[userID]; ok {
-				conn.Close()
+			if sendCh, ok := h.clients[userID]; ok {
+				close(sendCh)
 				delete(h.clients, userID)
 				log.Printf("User %d disconnected", userID)
+				h.mu.Unlock() // Unlock before broadcasting
+				h.broadcastPresence(userID, false)
+			} else {
+				h.mu.Unlock()
 			}
-			h.mu.Unlock()
 
 		case msg := <-h.broadcast:
 			// 1. Global Chat Logic (if ChatID is 0)
@@ -61,11 +68,12 @@ func (h *Hub) Run() {
 				h.mu.Lock()
 				msgBytes, _ := json.Marshal(msg)
 				log.Printf("Global broadcast from user %d", msg.SenderID)
-				for userID, conn := range h.clients {
-					err := conn.WriteMessage(websocket.TextMessage, msgBytes)
-					if err != nil {
-						log.Printf("Error sending global msg to user %d: %v", userID, err)
-						conn.Close()
+				for userID, sendCh := range h.clients {
+					select {
+					case sendCh <- msgBytes:
+					default:
+						// Buffer full - assumes client is dead or too slow
+						close(sendCh)
 						delete(h.clients, userID)
 					}
 				}
@@ -89,11 +97,11 @@ func (h *Hub) Run() {
 			h.mu.Lock()
 			msgBytes, _ := json.Marshal(msg)
 			for _, userID := range participants {
-				if conn, ok := h.clients[userID]; ok {
-					err := conn.WriteMessage(websocket.TextMessage, msgBytes)
-					if err != nil {
-						log.Printf("Error sending message to user %d: %v", userID, err)
-						conn.Close()
+				if sendCh, ok := h.clients[userID]; ok {
+					select {
+					case sendCh <- msgBytes:
+					default:
+						close(sendCh)
 						delete(h.clients, userID)
 					}
 				}
@@ -103,8 +111,8 @@ func (h *Hub) Run() {
 	}
 }
 
-func (h *Hub) RegisterClient(userID uint, conn *websocket.Conn) {
-	h.register <- &ClientInfo{UserID: userID, Conn: conn}
+func (h *Hub) RegisterClient(userID uint, sendCh chan []byte) {
+	h.register <- &ClientInfo{UserID: userID, Send: sendCh}
 }
 
 func (h *Hub) UnregisterClient(userID uint) {
@@ -113,4 +121,39 @@ func (h *Hub) UnregisterClient(userID uint) {
 
 func (h *Hub) BroadcastMessage(msg *models.Message) {
 	h.broadcast <- msg
+}
+
+func (h *Hub) broadcastPresence(senderID uint, online bool) {
+	status := "PRESENCE_OFFLINE"
+	if online {
+		status = "PRESENCE_ONLINE"
+	}
+
+	msg := &models.Message{
+		ChatID:    0,
+		SenderID:  senderID,
+		Type:      status,
+		CreatedAt: time.Now(),
+	}
+	msgBytes, _ := json.Marshal(msg)
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	for _, sendCh := range h.clients {
+
+		select {
+		case sendCh <- msgBytes:
+		default:
+			// Buffer full - assumes client is dead or too slow
+			// (Don't delete here to avoid modifying map during iteration)
+		}
+	}
+}
+
+func (h *Hub) IsUserOnline(userID uint) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	_, online := h.clients[userID]
+	return online
 }

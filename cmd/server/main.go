@@ -10,7 +10,7 @@ import (
 	"chat-service/internal/routes"
 	"chat-service/internal/services"
 	"chat-service/internal/storage"
-
+	
 	"github.com/gin-gonic/gin"
 	"log"
 )
@@ -31,8 +31,8 @@ func main() {
 
 	// Build dependencies
 	chatRepo := repository.NewChatRepository(db)
-	chatService := services.NewChatService(chatRepo)
 	hub := services.NewHub(chatRepo)
+	chatService := services.NewChatService(chatRepo, hub)
 
 	// Run Hub in background
 	go hub.Run()

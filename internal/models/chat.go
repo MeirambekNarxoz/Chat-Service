@@ -20,5 +20,6 @@ type Message struct {
 	Text      string    `gorm:"type:text" json:"text"`
 	FileURL   string    `gorm:"type:text" json:"file_url,omitempty"`
 	IsRead    bool      `gorm:"default:false" json:"is_read"`
+	Type      string    `gorm:"default:'message'" json:"type"`
 	CreatedAt time.Time `json:"created_at"`
 }

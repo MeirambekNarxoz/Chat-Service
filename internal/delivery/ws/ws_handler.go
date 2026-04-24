@@ -47,11 +47,10 @@ func (h *WSHandler) Connect(c *gin.Context) {
 		return
 	}
 
-	h.hub.RegisterClient(userID, conn)
+	sendCh := make(chan []byte, 256)
+	h.hub.RegisterClient(userID, sendCh)
 
-	done := make(chan struct{})
-	
-	// Message writer loop (for pings)
+	// Pump writes
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
 		defer func() {
@@ -60,21 +59,28 @@ func (h *WSHandler) Connect(c *gin.Context) {
 		}()
 		for {
 			select {
+			case msg, ok := <-sendCh:
+				if !ok {
+					// The hub closed the channel
+					conn.WriteMessage(websocket.CloseMessage, []byte{})
+					return
+				}
+				err := conn.WriteMessage(websocket.TextMessage, msg)
+				if err != nil {
+					return
+				}
 			case <-ticker.C:
 				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 					return
 				}
-			case <-done:
-				return
 			}
 		}
 	}()
 
-	// Clean up on disconnect
+	// Pump reads
 	defer func() {
-		close(done)
 		h.hub.UnregisterClient(userID)
-		conn.Close()
+		conn.Close() // Will close write pump gracefully eventually via err
 	}()
 
 	conn.SetReadLimit(4096)
