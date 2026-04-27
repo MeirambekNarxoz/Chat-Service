@@ -20,8 +20,7 @@ func InitDB(dsn string) *gorm.DB {
 }
 
 func RunMigrations(dsn string) {
-	// Add "postgres://" prefix if missing, minimal parser for migration
-	m, err := migrate.New("file://migrations", "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable")
+	m, err := migrate.New("file://migrations", dsn)
 	if err != nil {
 		log.Printf("Migration path err: %v. Make sure to run inside project root", err)
 		return
@@ -29,6 +28,6 @@ func RunMigrations(dsn string) {
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		log.Printf("Migration failed: %v", err)
 	} else {
-		log.Println("Migrations ran successfully or no change")
+		log.Println("Chat Service: Migrations ran successfully or no change")
 	}
 }

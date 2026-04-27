@@ -5,12 +5,11 @@ import (
 	"chat-service/internal/database"
 	httpDelivery "chat-service/internal/delivery/http"
 	wsDelivery "chat-service/internal/delivery/ws"
-	"chat-service/internal/models"
 	"chat-service/internal/repository"
 	"chat-service/internal/routes"
 	"chat-service/internal/services"
 	"chat-service/internal/storage"
-	
+
 	"github.com/gin-gonic/gin"
 	"log"
 )
@@ -18,9 +17,9 @@ import (
 func main() {
 	cfg := config.LoadConfig()
 
-	// Init DB and Auto-Migration
+	// Init DB and Run Migrations
+	database.RunMigrations(cfg.DBURL)
 	db := database.InitDB(cfg.DBURL)
-	db.AutoMigrate(&models.Chat{}, &models.ChatParticipant{}, &models.Message{})
 
 	var minioClient *storage.MinioClient
 	if cfg.MinIOEndpoint != "" && cfg.MinIOAccessKey != "" {
