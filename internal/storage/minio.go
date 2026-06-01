@@ -15,13 +15,13 @@ type MinioClient struct {
 	bucketName string
 }
 
-func NewMinioClient(endpoint, accessKey, secretKey string, useSSL bool) *MinioClient {
+func NewMinioClient(endpoint, accessKey, secretKey string, useSSL bool) (*MinioClient, error) {
 	minioClient, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 		Secure: useSSL,
 	})
 	if err != nil {
-		log.Fatalf("Failed to initialize MinIO client: %v", err)
+		return nil, fmt.Errorf("initialize MinIO client: %w", err)
 	}
 
 	bucketName := "image"
@@ -30,12 +30,12 @@ func NewMinioClient(endpoint, accessKey, secretKey string, useSSL bool) *MinioCl
 	if err != nil {
 		exists, errBucketExists := minioClient.BucketExists(ctx, bucketName)
 		if errBucketExists == nil && exists {
-			log.Printf("We already own %s\n", bucketName)
+			log.Printf("MinIO bucket %s already exists", bucketName)
 		} else {
-			log.Fatalf("Error checking bucket: %v", err)
+			return nil, fmt.Errorf("check/create bucket %s: %w", bucketName, err)
 		}
 	} else {
-		log.Printf("Successfully created %s\n", bucketName)
+		log.Printf("MinIO bucket %s created", bucketName)
 	}
 
 	// Set public read policy
@@ -59,7 +59,7 @@ func NewMinioClient(endpoint, accessKey, secretKey string, useSSL bool) *MinioCl
 	return &MinioClient{
 		client:     minioClient,
 		bucketName: bucketName,
-	}
+	}, nil
 }
 
 func (m *MinioClient) UploadFile(ctx context.Context, file *multipart.FileHeader) (string, error) {

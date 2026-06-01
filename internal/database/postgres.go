@@ -1,33 +1,26 @@
 package database
 
 import (
+	"chat-service/internal/models"
 	"log"
 
-	"github.com/golang-migrate/migrate/v4"
-	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
 func InitDB(dsn string) *gorm.DB {
+	if dsn == "" {
+		log.Fatal("DB_URL is empty: set DB_URL or CHAT_DB_* variables in .env")
+	}
+
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
-	return db
-}
+	if err := db.AutoMigrate(&models.Chat{}, &models.ChatParticipant{}, &models.Message{}); err != nil {
+		log.Printf("WARNING: GORM AutoMigrate failed: %v", err)
+	}
 
-func RunMigrations(dsn string) {
-	m, err := migrate.New("file://migrations", dsn)
-	if err != nil {
-		log.Printf("Migration path err: %v. Make sure to run inside project root", err)
-		return
-	}
-	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-		log.Printf("Migration failed: %v", err)
-	} else {
-		log.Println("Chat Service: Migrations ran successfully or no change")
-	}
+	return db
 }

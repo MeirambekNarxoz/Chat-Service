@@ -23,9 +23,14 @@ func main() {
 
 	var minioClient *storage.MinioClient
 	if cfg.MinIOEndpoint != "" && cfg.MinIOAccessKey != "" {
-		minioClient = storage.NewMinioClient(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinIOUseSSL)
+		client, err := storage.NewMinioClient(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinIOUseSSL)
+		if err != nil {
+			log.Printf("WARNING: MinIO unavailable (%v) — chat will run without file upload", err)
+		} else {
+			minioClient = client
+		}
 	} else {
-		log.Println("WARNING: MinIO credentials missing, file upload will fail")
+		log.Println("WARNING: MinIO credentials missing — file upload disabled")
 	}
 
 	// Build dependencies

@@ -45,11 +45,29 @@ func (s *ChatService) CreatePersonalChat(user1ID, user2ID uint) (*models.Chat, e
 	return chat, nil
 }
 
-func (s *ChatService) GetHistory(chatID uint) ([]models.Message, error) {
+func (s *ChatService) IsParticipant(chatID, userID uint) (bool, error) {
+	return s.repo.IsChatParticipant(chatID, userID)
+}
+
+func (s *ChatService) GetHistory(chatID, userID uint) ([]models.Message, error) {
+	ok, err := s.repo.IsChatParticipant(chatID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, ErrNotParticipant
+	}
 	return s.repo.GetMessagesByChatID(chatID)
 }
 
 func (s *ChatService) MarkAsRead(chatID, userID uint) error {
+	ok, err := s.repo.IsChatParticipant(chatID, userID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrNotParticipant
+	}
 	return s.repo.MarkAsRead(chatID, userID)
 }
 
@@ -86,4 +104,18 @@ func (s *ChatService) GetUserChatsRich(userID uint) ([]ChatDTO, error) {
 	}
 
 	return richChats, nil
+}
+
+func (s *ChatService) IsUserOnline(userID uint) bool {
+	return s.hub.IsUserOnline(userID)
+}
+
+func (s *ChatService) NewChatDTO(chatID, recipientID uint) ChatDTO {
+	return ChatDTO{
+		ID:          chatID,
+		RecipientID: recipientID,
+		LastMessage: nil,
+		UnreadCount: 0,
+		IsOnline:    s.hub.IsUserOnline(recipientID),
+	}
 }

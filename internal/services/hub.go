@@ -40,6 +40,7 @@ func (h *Hub) Run() {
 		case client := <-h.register:
 			h.mu.Lock()
 			if oldCh, ok := h.clients[client.UserID]; ok {
+				delete(h.clients, client.UserID)
 				close(oldCh) // Disconnect previous session
 			}
 			h.clients[client.UserID] = client.Send

@@ -2,6 +2,8 @@ package repository
 
 import (
 	"chat-service/internal/models"
+	"time"
+
 	"gorm.io/gorm"
 )
 
@@ -18,6 +20,9 @@ func (r *ChatRepository) CreateChat(chat *models.Chat) error {
 }
 
 func (r *ChatRepository) AddParticipant(chatParticipant *models.ChatParticipant) error {
+	if chatParticipant.JoinedAt.IsZero() {
+		chatParticipant.JoinedAt = time.Now()
+	}
 	return r.db.Create(chatParticipant).Error
 }
 
@@ -75,6 +80,14 @@ func (r *ChatRepository) GetChatParticipants(chatID uint) ([]uint, error) {
 	return userIDs, err
 }
 
+func (r *ChatRepository) IsChatParticipant(chatID, userID uint) (bool, error) {
+	var count int64
+	err := r.db.Model(&models.ChatParticipant{}).
+		Where("chat_id = ? AND user_id = ?", chatID, userID).
+		Count(&count).Error
+	return count > 0, err
+}
+
 func (r *ChatRepository) GetPersonalChat(user1ID, user2ID uint) (*models.Chat, error) {
 	var _ models.ChatParticipant
 	// Находим чаты, в которых участвует первый пользователь
@@ -113,13 +126,18 @@ func (r *ChatRepository) GetRecipientsByChatIDs(chatIDs []uint, userID uint) (ma
 }
 
 func (r *ChatRepository) GetLastMessagesByChatIDs(chatIDs []uint) (map[uint]*models.Message, error) {
-	var messages []models.Message
-	// Using a subquery/window function to get the latest message for each chat
-	subQuery := r.db.Table("messages").
-		Select("id, chat_id, text, sender_id, is_read, created_at, ROW_NUMBER() OVER (PARTITION BY chat_id ORDER BY created_at DESC) as rn").
-		Where("chat_id IN ?", chatIDs)
+	if len(chatIDs) == 0 {
+		return map[uint]*models.Message{}, nil
+	}
 
-	err := r.db.Table("(?) as m", subQuery).Where("rn = 1").Find(&messages).Error
+	var messages []models.Message
+	// PostgreSQL: latest message per chat_id
+	err := r.db.Raw(`
+		SELECT DISTINCT ON (chat_id) id, chat_id, sender_id, text, file_url, is_read, type, created_at
+		FROM messages
+		WHERE chat_id IN ?
+		ORDER BY chat_id, created_at DESC
+	`, chatIDs).Scan(&messages).Error
 	if err != nil {
 		return nil, err
 	}

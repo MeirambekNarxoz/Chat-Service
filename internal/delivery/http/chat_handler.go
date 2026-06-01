@@ -3,6 +3,7 @@ package http
 import (
 	"chat-service/internal/services"
 	"chat-service/internal/storage"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -22,6 +23,11 @@ func NewChatHandler(chatService *services.ChatService, minioClient *storage.Mini
 }
 
 func (h *ChatHandler) UploadFile(c *gin.Context) {
+	if h.minioClient == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "file storage is not configured"})
+		return
+	}
+
 	file, err := c.FormFile("file")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "file not found in request"})
@@ -44,8 +50,13 @@ func (h *ChatHandler) GetHistory(c *gin.Context) {
 		return
 	}
 
-	messages, err := h.chatService.GetHistory(uint(chatID))
+	userID := c.MustGet("user_id").(uint)
+	messages, err := h.chatService.GetHistory(uint(chatID), userID)
 	if err != nil {
+		if errors.Is(err, services.ErrNotParticipant) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get history"})
 		return
 	}
@@ -69,10 +80,7 @@ func (h *ChatHandler) CreateChat(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"chat_id":    chat.ID,
-		"created_at": chat.CreatedAt,
-	})
+	c.JSON(http.StatusCreated, h.chatService.NewChatDTO(chat.ID, req.RecipientID))
 }
 
 func (h *ChatHandler) GetUserChats(c *gin.Context) {
@@ -94,6 +102,10 @@ func (h *ChatHandler) MarkAsRead(c *gin.Context) {
 
 	userID := c.MustGet("user_id").(uint)
 	if err := h.chatService.MarkAsRead(uint(chatID), userID); err != nil {
+		if errors.Is(err, services.ErrNotParticipant) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to mark as read"})
 		return
 	}
